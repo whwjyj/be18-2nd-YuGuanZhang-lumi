@@ -1,6 +1,6 @@
 server:
   port: 8080
-
+# 3
 spring:
   # .env import
   config:
