@@ -1,5 +1,3 @@
-// File: com.yuguanzhang.lumi.email.service.EmailVerificationServiceImpl.java
-
 package com.yuguanzhang.lumi.email.service;
 
 import com.yuguanzhang.lumi.common.exception.GlobalException;
@@ -12,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;   // ✅ 추가
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,8 +32,8 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
 
     @Override
     @Transactional
+    @Async   // ✅ 메일 전송을 비동기로 실행
     public void sendVerificationEmail(String email) {
-        // 기존 이메일 인증 기록이 있는지 확인
         Optional<EmailVerification> existingVerification =
                 emailVerificationRepository.findByEmail(email);
 
@@ -45,8 +44,6 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         LocalDateTime now = LocalDateTime.now();
 
         EmailVerification verification;
-        // email 컬럼이 unique로 걸려 있어서 같은 이메일로 여러 개 인증 레코드를 만들면 충돌
-        // 그래서 updateForResend 이걸로 기존 인증 요청 상태를 바꿈
         if (existingVerification.isPresent()) {
             log.info("기존 인증 기록을 업데이트합니다. 이메일: {}", email);
             verification = existingVerification.get();
@@ -54,7 +51,6 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             verification.setDateTimeAt(now);
         } else {
             log.info("새로운 인증 기록을 생성합니다. 이메일: {}", email);
-            // 회원가입 전에 이메일 인증 가능 구조
             verification = EmailVerification.builder()
                                             .email(email)
                                             .verificationCode(token)
@@ -65,14 +61,12 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         }
 
         try {
-            // 이메일 인증 기록을 먼저 DB에 저장합니다.
             emailVerificationRepository.save(verification);
 
             String redisKey = "email:verify:" + token;
             redisTemplate.opsForValue()
                          .set(redisKey, email, 10, TimeUnit.MINUTES);
 
-            // 나중에 수정고려 8080이 아니라 실무에서 어떡해 하는지 봐야할 듯
             String link = "http://localhost:8080/api/email/verify?token=" + token;
 
             MimeMessage message = mailSender.createMimeMessage();
@@ -83,16 +77,13 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
                     "<html><body>" + "<p>이메일 인증을 위해 아래 링크를 클릭해주세요:</p>" + "<a href=\"" + link + "\">" + link + "</a>" + "</body></html>",
                     true);
 
-            
+            // ✅ 비동기 실행 덕분에 이 구간이 오래 걸려도 API 응답에는 영향 없음
             long startTime = System.currentTimeMillis();
             mailSender.send(message);
             long endTime = System.currentTimeMillis();
             log.info("이메일 발송 성공. 이메일: {} | 소요 시간: {} ms", email, (endTime - startTime));
-            // ← 추가 끝
-
-            log.info("이메일 발송 성공. 이메일: {}", email);
         } catch (Exception e) {
-            log.error("이메일 전송 중 오류가 발생했습니다: {}", e.getMessage(), e);
+            log.error("이메일 전송 중 오류 발생: {}", e.getMessage(), e);
             verification.markAsError();
         }
     }
@@ -105,34 +96,33 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
                                     .get(redisKey);
 
         if (email == null) {
-            log.warn("유효하지 않거나 만료된 토큰입니다: {}", token);
+            log.warn("유효하지 않거나 만료된 토큰: {}", token);
             throw new GlobalException(ExceptionMessage.EMAIL_VERIFICATION_FAILED);
         }
 
         Optional<EmailVerification> optionalVerification =
                 emailVerificationRepository.findByEmail(email);
         if (optionalVerification.isEmpty()) {
-            log.error("인증 기록을 찾을 수 없습니다. 이메일: {}", email);
+            log.error("인증 기록 없음. 이메일: {}", email);
             throw new GlobalException(ExceptionMessage.EMAIL_VERIFICATION_FAILED);
         }
 
         EmailVerification verification = optionalVerification.get();
         if (LocalDateTime.now()
                          .isAfter(verification.getExpirationAt())) {
-            log.warn("토큰이 만료되었습니다. 이메일: {}", email);
+            log.warn("토큰 만료. 이메일: {}", email);
             verification.markAsExpired();
             throw new GlobalException(ExceptionMessage.EMAIL_VERIFICATION_FAILED);
         }
         if (!verification.getVerificationCode()
                          .equals(token)) {
-            log.warn("인증 코드가 일치하지 않습니다. 토큰: {}", token);
+            log.warn("인증 코드 불일치. 토큰: {}", token);
             throw new GlobalException(ExceptionMessage.EMAIL_VERIFICATION_FAILED);
         }
 
         log.info("이메일 인증 성공. 이메일: {}", email);
         verification.markAsVerified();
 
-        // Redis에서 토큰 삭제
         redisTemplate.delete(redisKey);
 
         return "이메일 인증이 완료되었습니다.";
@@ -141,7 +131,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     @Override
     public boolean isEmailVerified(String email) {
         return emailVerificationRepository.findByEmail(email)
-                                          .map(EmailVerification::getStatus) // Optional<EmailVerification> → Optional<VerificationStatus> 로 변환
+                                          .map(EmailVerification::getStatus)
                                           .filter(status -> status == VerificationStatus.VERIFIED)
                                           .isPresent();
     }
