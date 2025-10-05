@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -53,6 +54,9 @@ public class EmailVerification {
 
     @Column(name = "dateTime_at", nullable = false)
     private LocalDateTime dateTimeAt;
+
+    @Version //DB에서 동일 레코드가 동시에 수정되는 경우 충돌을 감지하고 예외를 발생시킴
+    private Long version;
 
     public void markAsVerified() {
         this.status = VerificationStatus.VERIFIED;
