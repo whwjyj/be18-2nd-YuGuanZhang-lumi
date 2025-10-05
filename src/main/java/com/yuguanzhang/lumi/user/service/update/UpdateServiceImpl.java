@@ -8,6 +8,7 @@ import com.yuguanzhang.lumi.user.dto.update.UpdateResponesDto;
 import com.yuguanzhang.lumi.user.entity.User;
 import com.yuguanzhang.lumi.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.coyote.BadRequestException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,12 @@ public class UpdateServiceImpl implements UpdateService {
         // 현재 비밀번호 확인
         if (!passwordEncoder.matches(requestDto.getPassword(), user.getPassword())) {
             throw new GlobalException(ExceptionMessage.NOT_PASSWORD);
+        }
+
+        // 새 비밀번호 같은면 오류
+        if (requestDto.getPassword()
+                      .equals(requestDto.getNewPassword())) {
+            throw new GlobalException(ExceptionMessage.SAME_PASSWORD);
         }
 
         // 비밀번호 업데이트

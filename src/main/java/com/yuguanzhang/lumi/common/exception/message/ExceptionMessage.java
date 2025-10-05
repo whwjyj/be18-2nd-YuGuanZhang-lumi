@@ -10,6 +10,7 @@ public enum ExceptionMessage {
     ID_OR_PASSWORD_EMPTY("아이디와 비밀번호를 입력해주세요.", HttpStatus.BAD_REQUEST),
     INVALID_CREDENTIALS("아이디 또는 비밀번호가 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
     NOT_PASSWORD("비밀번호가 틀렸습니다.", HttpStatus.BAD_REQUEST),
+    SAME_PASSWORD("현재 비밀번호와 새 비밀번호가 동일합니다.", HttpStatus.BAD_REQUEST),
     DELETED_ACCOUNT("삭제된 계정입니다.", HttpStatus.UNAUTHORIZED),
     INTERNAL_SERVER_ERROR("서버 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
 
