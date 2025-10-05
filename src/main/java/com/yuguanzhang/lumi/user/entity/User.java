@@ -75,5 +75,7 @@ public class User {
         return "Y".equals(this.isDeleted);
     }
 
-
+    public void updatePassword(String newPassword) {
+        this.password = newPassword;
+    }
 }
