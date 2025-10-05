@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.scheduling.annotation.Async;   // ✅ 추가
+import org.springframework.scheduling.annotation.Async;   // ✅ 비동기 실행용
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,7 +32,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
 
     @Override
     @Transactional
-    @Async   // ✅ 메일 전송을 비동기로 실행
+    @Async("mailExecutor")   // ✅ AsyncConfig에서 만든 mailExecutor 쓰레드 풀 사용
     public void sendVerificationEmail(String email) {
         Optional<EmailVerification> existingVerification =
                 emailVerificationRepository.findByEmail(email);
@@ -45,12 +45,12 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
 
         EmailVerification verification;
         if (existingVerification.isPresent()) {
-            log.info("기존 인증 기록을 업데이트합니다. 이메일: {}", email);
+            log.info("기존 인증 기록 업데이트. 이메일: {}", email);
             verification = existingVerification.get();
             verification.updateForResend(token, expirationTime);
             verification.setDateTimeAt(now);
         } else {
-            log.info("새로운 인증 기록을 생성합니다. 이메일: {}", email);
+            log.info("새로운 인증 기록 생성. 이메일: {}", email);
             verification = EmailVerification.builder()
                                             .email(email)
                                             .verificationCode(token)
@@ -77,13 +77,13 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
                     "<html><body>" + "<p>이메일 인증을 위해 아래 링크를 클릭해주세요:</p>" + "<a href=\"" + link + "\">" + link + "</a>" + "</body></html>",
                     true);
 
-            // ✅ 비동기 실행 덕분에 이 구간이 오래 걸려도 API 응답에는 영향 없음
+            // ✅ 비동기 실행이므로 실제 발송에 시간이 걸려도 API 응답엔 영향 없음
             long startTime = System.currentTimeMillis();
             mailSender.send(message);
             long endTime = System.currentTimeMillis();
             log.info("이메일 발송 성공. 이메일: {} | 소요 시간: {} ms", email, (endTime - startTime));
         } catch (Exception e) {
-            log.error("이메일 전송 중 오류 발생: {}", e.getMessage(), e);
+            log.error("이메일 전송 오류. 이메일: {}, 원인: {}", email, e.getMessage(), e);
             verification.markAsError();
         }
     }
