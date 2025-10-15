@@ -22,7 +22,6 @@ public class UpdateController {
     public BaseResponseDto<UpdateResponesDto> update(@RequestBody UpdateRequestDto request) {
         UpdateResponesDto response = updateService.update(request);
         return BaseResponseDto.of(HttpStatus.OK, response);
-
     }
 
 }
